@@ -32,7 +32,9 @@ Importe template on Zabbix
 # 5 - Configure AWS credentials macros
 
 {$AWS_ACCESS_KEY} - Access Key
+
 {$AWS_REGION} - AWS region where the cluster is provisioned ex: us-east-1
+
 {$AWS_SECRET_KEY} - Secret Key
 
 # 4 - Create Host 
