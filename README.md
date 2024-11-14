@@ -27,7 +27,7 @@ Copy the redshift_stats.py file to the external scripts folder that is defined i
   /usr/lib/zabbix/externalscripts
 
 # 3 - Import Template on Zabbix
-Importe template on Zabbix
+Import template into Zabbix
 
 # 5 - Configure AWS credentials macros
 
