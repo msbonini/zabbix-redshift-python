@@ -17,7 +17,8 @@ Activate the virtual environment
 source myenv/bin/activate
 
 Install boto3
-pip install boto3
+ 
+ pip install boto3
 
 # 2 - Copy script python to folder external scripts
 Copy the redshift_stats.py file to the external scripts folder that is defined in the zabbix_server.conf file example directory:
