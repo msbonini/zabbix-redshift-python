@@ -1,0 +1,648 @@
+zabbix_export:
+  version: '7.0'
+  template_groups:
+    - uuid: 7df96b18c230490a9a0a9e2307226338
+      name: Templates
+  templates:
+    - uuid: e8bfd51aec5b41bf914f223566f709b9
+      template: 'Template AWS Redshift'
+      name: 'Template AWS Redshift'
+      description: |
+        Template Created by Mateus Bonini
+        
+        This model was based on the zabbix-cloudwatch project available at the link below:
+        
+        https://github.com/omni-lchen/zabbix-cloudwatch/tree/master
+        
+        Main Changes Implemented:
+        
+        1. Bulk Data Collection: I developed a unique script that collects all metrics at once and feeds all dependent items simultaneously, optimizing the monitoring process.
+        
+        2. Dependent Items: Items that previously ran the original script for each metric have been converted to dependent items. I used jsonpath to extract the corresponding values ​​for each item, improving efficiency.
+        
+        3. Macro Names: I optimized the macro names to make triggers easier to understand and understand, making configuration more intuitive.
+        
+        4. Units and History Retention: I corrected some units of measurement and adjusted history retention times to ensure the accuracy and relevance of monitored data.
+        
+        5. Credentials via Macros: Access Key, Secret Key and Region credentials are now managed through macros within Zabbix, simplifying configuration and increasing security.
+      groups:
+        - name: Templates
+      items:
+        - uuid: 2a48d0cb966d4a589353184150181d9a
+          name: 'Redshift::CPUUtilization'
+          type: DEPENDENT
+          key: redshift.cpu.utilization
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          description: 'The percentage of CPU utilization. For clusters, this metric represents an aggregation of all nodes (leader and compute) CPU utilization values.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.CPUUtilization
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+          triggers:
+            - uuid: d891ac88f4e94c97b90ae2560e7b123e
+              expression: 'min(/Template AWS Redshift/redshift.cpu.utilization,#5)>{$CLUSTER_CPU_USAGE_CRIT}'
+              name: 'Redshift - Alta Utilização da CPU > {$CLUSTER_CPU_USAGE_CRIT} por mais de 5 minutos'
+              opdata: 'Uso de CPU: {ITEM.VALUE}'
+              priority: HIGH
+              description: |
+                O Cluster pode apresentar lentidões por conta da Alta
+                carga de processamento.
+        - uuid: 2cd7f270a76846acb785ef78627a2914
+          name: 'Redshift::DatabaseConnections'
+          type: DEPENDENT
+          key: redshift.database.connections
+          delay: '0'
+          history: 1d
+          description: 'The number of database connections to a cluster.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.DatabaseConnections
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+        - uuid: 7bcfaf54d9c8441d97aeb16399ec74d1
+          name: 'Redshift::HealthStatus'
+          type: DEPENDENT
+          key: redshift.healt.status
+          delay: '0'
+          history: 1d
+          description: |
+            Indicates the health of the cluster.
+            1/0 (HEALTHY/UNHEALTHY in the Amazon Redshift console)
+          valuemap:
+            name: 'Health Status'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.HealthStatus
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+          triggers:
+            - uuid: e14bdeff5c2e405bb0e30b05431ef8bf
+              expression: 'last(/Template AWS Redshift/redshift.healt.status)=0'
+              name: 'Redshift - Cluster não está íntegro'
+              opdata: 'Status: {ITEM.VALUE}'
+              priority: DISASTER
+              description: |
+                Indica a integridade do cluster.
+                1/0 (saudável/insalubre no console do Amazon Redshift)
+        - uuid: 57a65c3c7e1441fab8621b25ff0463fb
+          name: 'Redshift::MaintenanceMode'
+          type: DEPENDENT
+          key: redshift.maintenance.mode
+          delay: '0'
+          history: 12h
+          trends: 7d
+          description: |
+            Indicates whether the cluster is in maintenance mode.
+            1/0 (ON/OFF in the Amazon Redshift console)
+          valuemap:
+            name: 'Maintenance Mode'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.MaintenanceMode
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+          triggers:
+            - uuid: d6aa69c7bee34f3ea7527c9dca663c42
+              expression: 'last(/Template AWS Redshift/redshift.maintenance.mode)=1'
+              name: 'Redshift - O Cluster está em modo de manutenção'
+              opdata: 'Modo manutencao ativo: {ITEM.VALUE}'
+              priority: AVERAGE
+              description: |
+                Indica se o cluster está em modo de manutenção.
+                (1 = LIGADO/ 2 = DESLIGADO no console do Amazon Redshift)
+        - uuid: fdd6ac4749804a07af51e10ffddfab2d
+          name: 'Redshift::NetworkReceiveThroughput'
+          type: DEPENDENT
+          key: redshift.network.receive.throughput
+          delay: '0'
+          history: 1d
+          value_type: FLOAT
+          units: bps
+          description: 'The rate at which the node or cluster receives data.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.NetworkReceiveThroughput
+              error_handler: DISCARD_VALUE
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+        - uuid: 857c29fe57334b2788dedac9baf9b7af
+          name: 'Redshift::NetworkTransmitThroughput'
+          type: DEPENDENT
+          key: redshift.network.transmit.throughput
+          delay: '0'
+          history: 1d
+          value_type: FLOAT
+          units: bps
+          description: 'The rate at which the node or cluster writes data.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.NetworkTransmitThroughput
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+        - uuid: f17c3b43afdb4ee0bc8d005ded189c73
+          name: 'Redshift::PercentageDiskSpaceUsed'
+          type: DEPENDENT
+          key: redshift.percentage.disk.space.used
+          delay: '0'
+          history: 7d
+          value_type: FLOAT
+          units: '%'
+          description: 'The percent of disk space used.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.PercentageDiskSpaceUsed
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+          triggers:
+            - uuid: e6b8bdc8326e482592b08950f5a02413
+              expression: 'min(/Template AWS Redshift/redshift.percentage.disk.space.used,#3)>{$CLUSTER_DISKSPACEUSED_WARN} and min(/Template AWS Redshift/redshift.percentage.disk.space.used,#3)<{$CLUSTER_DISKSPACEUSED_CRIT}'
+              name: 'Redshift - O espaço em disco livre é baixo uso maior que {$CLUSTER_DISKSPACEUSED_WARN}%'
+              opdata: 'Espaço usado: {ITEM.VALUE}'
+              priority: AVERAGE
+              description: 'Verifique antes que o espaço usado atinge {$CLUSTER_DISKSPACEUSED_CRIT}%'
+              manual_close: 'YES'
+            - uuid: c7018cab2df64cb6be9906ec057be7e0
+              expression: 'min(/Template AWS Redshift/redshift.percentage.disk.space.used,#3)>{$CLUSTER_DISKSPACEUSED_CRIT}'
+              name: 'Redshift - O espaço em disco livre é criticamente baixo uso maior que {$CLUSTER_DISKSPACEUSED_CRIT}%'
+              opdata: 'Espaço usado: {ITEM.VALUE}'
+              priority: HIGH
+              description: 'Pode haver problemas com o Cluster por falta de espaço em disco.'
+        - uuid: bc36985d49aa41d887b3ddd71527098c
+          name: 'Redshift::ReadIOPS'
+          type: DEPENDENT
+          key: redshift.read.iops
+          delay: '0'
+          history: 1d
+          value_type: FLOAT
+          units: ops/s
+          description: 'The average number of disk read operations per second.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.ReadIOPS
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+        - uuid: fe354519237040ad82a7ee755989460b
+          name: 'Redshift::ReadLatency'
+          type: DEPENDENT
+          key: redshift.read.latency
+          delay: '0'
+          history: 1w
+          value_type: FLOAT
+          units: s
+          description: 'The average amount of time taken for disk read I/O operations.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.ReadLatency
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+          triggers:
+            - uuid: da8de0af66f64f07931f945ce03b6e4c
+              expression: 'min(/Template AWS Redshift/redshift.read.latency,#3)>{$CLUSTER_READ_LATENCY_CRIT}'
+              name: 'Redshift - A latência de leitura e muito alta maior que {$CLUSTER_READ_LATENCY} por mais de 3 minutos'
+              opdata: '{ITEM.VALUE}'
+              priority: HIGH
+              description: 'The average amount of time taken for disk read I/O operations.'
+            - uuid: 52c4571f69e343b3970e653aa269229e
+              expression: 'min(/Template AWS Redshift/redshift.read.latency,#3)>{$CLUSTER_READ_LATENCY_WARN} and min(/Template AWS Redshift/redshift.read.latency,#3)<{$CLUSTER_READ_LATENCY_CRIT}'
+              name: 'Redshift - A latência de leitura esta ficando alta'
+              opdata: '{ITEM.VALUE}'
+              priority: AVERAGE
+              description: 'O tempo médio necessário para operações de E/S de leitura de disco.'
+        - uuid: dabd4c31b3ec4ed2ab03deff0405a866
+          name: 'Redshift::ReadThroughput'
+          type: DEPENDENT
+          key: redshift.read.throughput
+          delay: '0'
+          history: 1d
+          value_type: FLOAT
+          units: B/s
+          description: 'The average number of bytes read from disk per second.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.ReadThroughput
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+        - uuid: 2ba43fdbc1a7404eafac2430ed54f266
+          name: 'Redshift::WriteIOPS'
+          type: DEPENDENT
+          key: redshift.write.iops
+          delay: '0'
+          history: 1w
+          value_type: FLOAT
+          units: ops/s
+          description: 'The average number of write operations per second.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.WriteIOPS
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+        - uuid: fa6971d946aa41099f57a5652a480e73
+          name: 'Redshift::WriteLatency'
+          type: DEPENDENT
+          key: redshift.write.latency
+          delay: '0'
+          history: 1w
+          value_type: FLOAT
+          units: s
+          description: 'The average amount of time taken for disk write I/O operations.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.WriteLatency
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+          triggers:
+            - uuid: 808c0c808b8f4935aaa687e1d8d69455
+              expression: 'min(/Template AWS Redshift/redshift.write.latency,#3)>{$CLUSTER_READ_LATENCY_CRIT}'
+              name: 'Redshift - A latência de gravação e muito alta'
+              opdata: '{ITEM.VALUE}'
+              priority: HIGH
+              description: 'O tempo médio necessário para operações de E/S de gravação em disco.'
+            - uuid: ab7cc77133ad4ac68cfc0bb11a4b7b0c
+              expression: 'min(/Template AWS Redshift/redshift.write.latency,#3)>{$CLUSTER_READ_LATENCY_WARN} and min(/Template AWS Redshift/redshift.write.latency,#3)<{$CLUSTER_READ_LATENCY_CRIT}'
+              name: 'Redshift::A latência de gravação esta ficando alta'
+              opdata: '{ITEM.VALUE}'
+              priority: AVERAGE
+              description: 'O tempo médio necessário para operações de E/S de gravação em disco.'
+        - uuid: be8f34de12e64410b5c49a4a1d1289c4
+          name: 'Redshift::WriteThroughput'
+          type: DEPENDENT
+          key: redshift.write.throughput
+          delay: '0'
+          history: 1w
+          value_type: FLOAT
+          units: B/s
+          description: 'The average number of bytes written to disk per second.'
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.WriteThroughput
+          master_item:
+            key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          tags:
+            - tag: Application
+              value: RedShift
+        - uuid: 00a1319bc5b746d6b07a853c2b371a59
+          name: 'Redshift:: Get Data All Metrics'
+          type: EXTERNAL
+          key: 'redshift_stats.py["--cluster-id","{HOST.HOST}","--access-key","{$AWS_ACCESS_KEY}","--secret-key","{$AWS_SECRET_KEY}","--region","{$AWS_REGION}"]'
+          history: '0'
+          value_type: TEXT
+          trends: '0'
+          description: 'Get all metrics by feeding dependent items.'
+          tags:
+            - tag: Application
+              value: 'Zabbix raw item'
+      macros:
+        - macro: '{$AWS_ACCESS_KEY}'
+          description: 'AWS Access Key'
+        - macro: '{$AWS_REGION}'
+          value: us-east-1
+          description: 'AWS region where the cluster is provisioned'
+        - macro: '{$AWS_SECRET_KEY}'
+          description: 'AWS Secret Key'
+        - macro: '{$CLUSTER_CPU_USAGE_CRIT}'
+          value: '90'
+          description: 'Critical CPU Alert Value'
+        - macro: '{$CLUSTER_DISKSPACEUSED_CRIT}'
+          value: '90'
+          description: 'Critical Disk Usage Alert Value'
+        - macro: '{$CLUSTER_DISKSPACEUSED_WARN}'
+          value: '85'
+          description: 'Warning Disk Usage Alert Value'
+        - macro: '{$CLUSTER_READ_LATENCY_CRIT}'
+          value: '1000'
+          description: 'Critical Severity Latency Alert Value'
+        - macro: '{$CLUSTER_READ_LATENCY_WARN}'
+          value: '500'
+          description: 'Latency alert value severity Attention'
+      dashboards:
+        - uuid: 329f6aec6ca64391816f3b69177d1da3
+          name: 'Redshift::Performance'
+          pages:
+            - widgets:
+                - type: graph
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'DB Connections'
+                    - type: STRING
+                      name: reference
+                      value: AAAAA
+                - type: graph
+                  'y': '5'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'Storage Stats'
+                    - type: STRING
+                      name: reference
+                      value: AAAAC
+                - type: graph
+                  'y': '10'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'Network Stats'
+                    - type: STRING
+                      name: reference
+                      value: AAAAE
+                - type: graph
+                  'y': '15'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'Health Status'
+                    - type: STRING
+                      name: reference
+                      value: AAAAG
+                - type: graph
+                  'y': '20'
+                  width: '72'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'Read / Write - Throughput'
+                    - type: STRING
+                      name: reference
+                      value: WBCDY
+                - type: graph
+                  x: '36'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: Latency
+                    - type: STRING
+                      name: reference
+                      value: AAAAB
+                - type: graph
+                  x: '36'
+                  'y': '5'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'CPU Usage Stats'
+                    - type: STRING
+                      name: reference
+                      value: AAAAD
+                - type: graph
+                  x: '36'
+                  'y': '10'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'IO Stats'
+                    - type: STRING
+                      name: reference
+                      value: AAAAF
+                - type: graph
+                  x: '36'
+                  'y': '15'
+                  width: '36'
+                  height: '5'
+                  fields:
+                    - type: GRAPH
+                      name: graphid.0
+                      value:
+                        host: 'Template AWS Redshift'
+                        name: 'Maintenance Mode'
+                    - type: STRING
+                      name: reference
+                      value: AAAAH
+      valuemaps:
+        - uuid: 781681ba3b284ed192c1deaf611c07ad
+          name: 'Health Status'
+          mappings:
+            - value: '1'
+              newvalue: Healthy
+            - value: '0'
+              newvalue: Unhealthy
+        - uuid: e85a6bb31f0d44f6b5d2afb63d360c78
+          name: 'Maintenance Mode'
+          mappings:
+            - value: '0'
+              newvalue: 'Off'
+            - value: '1'
+              newvalue: 'On'
+  graphs:
+    - uuid: 95f76b47349b498db17e0449307bb20b
+      name: 'CPU Usage Stats'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 0000EE
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.cpu.utilization
+    - uuid: 49f3011dbcea47e8a3720c6f7fc9f311
+      name: 'DB Connections'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 00C800
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.database.connections
+    - uuid: 96e2acd1f8eb400fb5848e536f2f152b
+      name: 'Health Status'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 00C800
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.healt.status
+    - uuid: f36b59bcf44e4a1da0aa24786b5f5d51
+      name: 'IO Stats'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 00CC00
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.read.iops
+        - sortorder: '1'
+          drawtype: GRADIENT_LINE
+          color: 00EEEE
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.write.iops
+    - uuid: f1a7beabea3646328d5bfc0bfcdb1aa0
+      name: Latency
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: 0000DD
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.read.latency
+        - sortorder: '1'
+          drawtype: BOLD_LINE
+          color: DD0000
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.write.latency
+    - uuid: 57bf3ae4ef8b406696b3a4c75d698d97
+      name: 'Maintenance Mode'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: DD0000
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.maintenance.mode
+    - uuid: d067009a8ba44cc9b5962407a6f594b5
+      name: 'Network Stats'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: 00CC00
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.network.transmit.throughput
+        - sortorder: '1'
+          drawtype: GRADIENT_LINE
+          color: 00CCCC
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.network.receive.throughput
+    - uuid: b37a1b48ffc649469513af9066746bd8
+      name: 'Read / Write - Throughput'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: BOLD_LINE
+          color: DD0000
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.read.throughput
+        - sortorder: '1'
+          drawtype: BOLD_LINE
+          color: 0000DD
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.write.throughput
+    - uuid: 64945ed111c84f879a050f177220ea5e
+      name: 'Storage Stats'
+      width: '800'
+      ymin_type_1: FIXED
+      graph_items:
+        - drawtype: GRADIENT_LINE
+          color: EE0000
+          yaxisside: RIGHT
+          calc_fnc: ALL
+          item:
+            host: 'Template AWS Redshift'
+            key: redshift.percentage.disk.space.used
